@@ -170,15 +170,15 @@ def deploy_distro():
             ).wait()
 
 def update_grub():
-    import os
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
-            subprocess.call(
+            subprocess.Popen(
                 ["mount","--bind","/proc","%s%s" %(MOUNT_POINT,"/proc")],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
-            subprocess.call(
+            #print ["mount","--bind","/dev","%s%s" %(MOUNT_POINT,"/dev")]
+            subprocess.Popen(
                 ["mount","--bind","/dev","%s%s" %(MOUNT_POINT,"/dev")],
                 stdout=out_log,
                 stderr=err_log
@@ -188,12 +188,12 @@ def update_grub():
                 stdout=out_log,
                 stderr=err_log
             ).wait()
-            subprocess.call(
+            subprocess.Popen(
                 ["umount","%s%s" %(MOUNT_POINT,"/proc")],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
-            subprocess.call(
+            subprocess.Popen(
                 ["umount","%s%s" %(MOUNT_POINT,"/dev")],
                 stdout=out_log,
                 stderr=err_log
@@ -208,7 +208,7 @@ def label_device():
                 stdout=out_log,
                 stderr=err_log
             )
-    
+
 
 def sure_question():
     while 1:
@@ -220,6 +220,27 @@ def sure_question():
             return 1
         elif sure_q=="q":
             return 0
+
+
+def do_all(device):
+    #format
+    umount_device(device)
+    print 'Formatting device...'
+    format_device("ext3", device)
+    print '\rOk'
+        #umount_device(device)
+        #label_device(device)
+    mount_device(device)
+    #deploy linux rt
+    print 'Deploying linux rt...'
+    deploy_distro()
+    print '\rOk'
+    print 'Updating grub bootloader...'
+    update_grub()
+    print '\rOk'
+    umount_device(device)
+    print "\nProcess finished sucessfull!\n"
+
 
 def main():
     # parse command line options
@@ -243,48 +264,29 @@ def main():
         devices_info = list_devices()
         device_select = raw_input(
             "\nEnter the partition number to format (q to quit):")
-        try:
-            device_select = int(device_select)-1
-            if device_select>=0 and device_select<len(devices_info):
-                answ = sure_question()
-                if answ==0:
-                    #quit
-                    return
-                elif answ==1:
-                    #no format
-                    pass
-                elif answ==2:
-                    #format
+        if device_select=="q":
+            return
+        else:
+            try:
+                device_select = int(device_select)-1
+                if device_select>=0 and device_select<len(devices_info):
                     device = devices_info[device_select]
-                    umount_device(device)
-                    print 'Formatting device...'
-                    format_device("ext3", device)
-                    print '\rOk'
-                        #umount_device(device)
-                        #label_device(device)
-                    mount_device(device)
-                    #deploy linux rt
-                    print 'Deploying linux rt...'
-                    deploy_distro()
-                    print '\rOk'
-                    print 'Updating grub bootloader...'
-                    update_grub()
-                    print '\rOk'
-                    umount_device(device)
-                    print "\nProcess finished sucessfull!\n"
-
-
-                    return
-
-        except:
-            #print "Unexpected error:", sys.exc_info()[0]
-            if device_select=="q":
-                return
-            else:
-                pass
-
+                    answ = sure_question()
+                    if answ==0:
+                        #quit
+                        return
+                    elif answ==1:
+                        pass
+                    elif answ==2:
+                        do_all(device)
+                        return
+                else:
+                    print "Wrong device number, try again...\n"
+            except ValueError:
+                print "Wrong value introduced!\n"
 
 
 
 if __name__ == "__main__":
     main()
+
