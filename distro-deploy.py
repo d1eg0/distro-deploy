@@ -1,7 +1,9 @@
 #!/usr/bin/python
-"""Real-Time Linux installer
+"""Distro-Deploy
 
-Installs a debian distro with the rt kernel patch.
+Deploys a linux distro in a Flash memory. Creates a partition table and a ext3
+filesystem. Set partition bootable flag on. Finally, updates the grub
+configuration.
 """
 import sys
 import getopt
@@ -9,12 +11,20 @@ import os
 import subprocess
 import re
 
-MOUNT_POINT = '/mnt/raptorrt'
+#path to tar gz distro
 PATH_DISTRO= '/media/Dades/Proyectos/Raptor/backup/rt_backup_newboard.tgz'
+
+#default mount point (DON'T CHANGE)
+MOUNT_POINT = '/mnt/raptorrt'
+
+#process output log file
 LOG_FILE = 'log.out'
+#process errors log file
 ERR_LOG_FILE = 'log_err.out'
 
 def clean_logs():
+    """Delete log files
+    """
     try:
         subprocess.call(['rm',LOG_FILE])
     except:
@@ -26,6 +36,8 @@ def clean_logs():
         pass
 
 def list_devices():
+    """Get storage devices ids and list them.
+    """
     devices_info = list()
     with open(ERR_LOG_FILE,'a') as err_log:
         devices = subprocess.Popen(
@@ -47,6 +59,8 @@ def list_devices():
 
 
 def parse_device_info(line):
+    """Parses line device info.
+    """
     device_info = dict()
 
     device_info['label'] = get_label(line)     
@@ -56,6 +70,8 @@ def parse_device_info(line):
     return device_info
 
 def get_label(line):
+    """Gets label field from line device info.
+    """
     try:
         return re.search(r"LABEL=\"(\w+)?\"",line).group(1)
     except:
@@ -63,6 +79,8 @@ def get_label(line):
 
 
 def get_partition(line):
+    """Gets partition path from line device info.
+    """
     try:
         return re.search(r"(\/dev\/\w+)?",line).group(0)
     except:
@@ -70,6 +88,8 @@ def get_partition(line):
 
 
 def get_device(line):
+    """Gets device path from line device info.
+    """
     try:
         return re.search(r"(\/dev\/\w+)?[1-9]",line).group(1)
     except:
@@ -77,6 +97,8 @@ def get_device(line):
 
 
 def get_type(line):
+    """Gets filesystem type from line device info.
+    """
     try:
         return re.search(r"TYPE=\"(\w+)?\"",line).group(1)  
     except:
@@ -84,6 +106,8 @@ def get_type(line):
 
 
 def umount_device(device):
+    """Umounts device and deletes mount point.
+    """
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
             subprocess.Popen(
@@ -101,6 +125,8 @@ def umount_device(device):
                 pass
 
 def mount_device(device):
+    """Creates MOUNT_POINT dir and mounts the device in,
+    """
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
             subprocess.Popen(
@@ -115,23 +141,11 @@ def mount_device(device):
             ).wait()
 
 def format_device(fstype, device):
+    """Creates table partition and the filesystem fstype on device.
+    """
     device_path = device['partition'][0:len(device['partition'])-1]
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
-            #fdisk method
-
-            #opts = subprocess.Popen(
-            #    ["cat","fdisk.opts"],
-            #    stdout=subprocess.PIPE,
-            #    stderr=err_log
-            #)
-            #subprocess.Popen(
-            #    ["fdisk",device_path],
-            #    stdin=opts.stdout,
-            #    stdout=out_log,
-            #    stderr=err_log
-            #).wait()
-
             #sfdisk method
 
             #create partition table
@@ -161,6 +175,8 @@ def format_device(fstype, device):
             ).wait()
 
 def deploy_distro():
+    """Uncompress targz distro file from PATH_DISTRO to MOUNT_POINT.
+    """
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
             subprocess.Popen(
@@ -170,6 +186,8 @@ def deploy_distro():
             ).wait()
 
 def update_grub():
+    """Updates grub configuration.
+    """
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
             subprocess.Popen(
@@ -211,6 +229,8 @@ def label_device():
 
 
 def sure_question():
+    """Asks a question to be sure to delete all the data from device.
+    """
     while 1:
         sure_q = raw_input(
             "\nAll data in %s will be deleted. Are you sure? (y=yes,n=no or q to quit):")
@@ -223,6 +243,8 @@ def sure_question():
 
 
 def do_all(device):
+    """Format device, deploy targz distro file and updates grub configuration.
+    """
     #format
     umount_device(device)
     print 'Formatting device...'
