@@ -4,6 +4,10 @@
 Deploys a linux distro in a Flash memory. Creates a partition table and a ext3
 filesystem. Set partition bootable flag on. Finally, updates the grub
 configuration.
+
+Usage:
+
+    distro-deploy.py --input=rt_distro.tgz
 """
 import sys
 import getopt
@@ -11,8 +15,6 @@ import os
 import subprocess
 import re
 
-#path to tar gz distro
-PATH_DISTRO= '/media/Dades/Proyectos/Raptor/backup/rt_backup_newboard.tgz'
 
 #default mount point (DON'T CHANGE)
 MOUNT_POINT = '/mnt/raptorrt'
@@ -174,18 +176,18 @@ def format_device(fstype, device):
                 stderr=err_log
             ).wait()
 
-def deploy_distro():
+def deploy_distro(input_distro):
     """Uncompress targz distro file from PATH_DISTRO to MOUNT_POINT.
     """
     with open(LOG_FILE,'a') as out_log:
         with open(ERR_LOG_FILE,'a') as err_log:
             subprocess.Popen(
-                ["tar","-zxvf",PATH_DISTRO,"-C",MOUNT_POINT],
+                ["tar","-zxvf",input_distro,"-C",MOUNT_POINT],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
 
-def update_grub():
+def update_grub(device):
     """Updates grub configuration.
     """
     with open(LOG_FILE,'a') as out_log:
@@ -198,6 +200,11 @@ def update_grub():
             #print ["mount","--bind","/dev","%s%s" %(MOUNT_POINT,"/dev")]
             subprocess.Popen(
                 ["mount","--bind","/dev","%s%s" %(MOUNT_POINT,"/dev")],
+                stdout=out_log,
+                stderr=err_log
+            ).wait()
+            subprocess.Popen(
+                ["chroot",MOUNT_POINT,"grub-install %s" % (device['device'])],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
@@ -242,23 +249,23 @@ def sure_question():
             return 0
 
 
-def do_all(device):
+def do_all(device,input_distro):
     """Format device, deploy targz distro file and updates grub configuration.
     """
     #format
     umount_device(device)
     print 'Formatting device...'
-    format_device("ext3", device)
+    format_device("ext2", device)
     print '\rOk'
         #umount_device(device)
         #label_device(device)
     mount_device(device)
     #deploy linux rt
     print 'Deploying linux rt...'
-    deploy_distro()
+    deploy_distro(input_distro)
     print '\rOk'
     print 'Updating grub bootloader...'
-    update_grub()
+    update_grub(device)
     print '\rOk'
     umount_device(device)
     print "\nProcess finished sucessfull!\n"
@@ -266,20 +273,31 @@ def do_all(device):
 
 def main():
     # parse command line options
+    input_distro = None
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "h", ["help"])
+        opts, args = getopt.getopt(sys.argv[1:], "hi", ["help","input="])
     except getopt.error, msg:
         print msg
         print "for help use --help"
         sys.exit(2)
-        # process options
-        for o, a in opts:
-            if o in ("-h", "--help"):
-                print __doc__
-                sys.exit(0)
-                # process arguments
-                for arg in args:
-                    process(arg) # process() is defined elsewhere
+
+    # process options
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            print __doc__
+            sys.exit(0)
+            # process arguments
+            for arg in args:
+                process(arg) # process() is defined elsewhere
+
+        elif o in ("-i", "--input"):
+            input_distro = a
+     
+
+    if input_distro == None:
+        print __doc__
+        sys.exit(0)
+
 
     clean_logs()
     while 1:
@@ -300,7 +318,7 @@ def main():
                     elif answ==1:
                         pass
                     elif answ==2:
-                        do_all(device)
+                        do_all(device,input_distro)
                         return
                 else:
                     print "Wrong device number, try again...\n"
@@ -310,5 +328,10 @@ def main():
 
 
 if __name__ == "__main__":
+#check root permissions
+    if os.geteuid() != 0:
+        print "Error: only root can call this script, use sudo instead"
+        sys.exit(0)
+
     main()
 
