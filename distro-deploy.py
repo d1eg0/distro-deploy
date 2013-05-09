@@ -152,20 +152,19 @@ def format_device(fstype, device):
 
             #create partition table
             #one partition with all available space
-            opts = subprocess.Popen(
-                ["echo","0,,L"],
-                stdout=subprocess.PIPE,
-                stderr=err_log
-            )
             subprocess.Popen(
-                ["sfdisk",device['device']],
-                stdin=opts.stdout,
+                ["parted","-s",device['device'],"mktable","msdos"],
+                stdout=out_log,
+                stderr=err_log
+            ).wait()
+            subprocess.Popen(
+                ["parted","-s",device['device'],"unit","MB","mkpart","primary",fstype,"1","100%"],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
             #make the partition booteable
             subprocess.Popen(
-                ["sfdisk",device['device'],"-A","1"],
+                ["parted","-s",device['device'],"set","1","boot","on"],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
@@ -204,7 +203,7 @@ def update_grub(device):
                 stderr=err_log
             ).wait()
             subprocess.Popen(
-                ["chroot",MOUNT_POINT,"grub-install %s" % (device['device'])],
+                ["chroot",MOUNT_POINT,"/bin/bash -c \"grub-install %s\"" % (device['device'])],
                 stdout=out_log,
                 stderr=err_log
             ).wait()
@@ -270,6 +269,32 @@ def do_all(device,input_distro):
     umount_device(device)
     print "\nProcess finished sucessfull!\n"
 
+def is_parted_installed():
+    try:
+        if subprocess.check_call(["parted","-v"]) == 0:
+            return True
+        else:
+            return False
+    except:
+        return False
+
+
+def install_parted():
+    try:
+        with open(LOG_FILE,'a') as out_log:
+            with open(ERR_LOG_FILE,'a') as err_log:
+                if subprocess.check_call(['apt-get','install','-y','parted'],
+                              stdout=out_log, stderr=err_log) == 0:
+                    print "Parted installed successfully"
+
+                else:
+                    print "Problem ocurred installing parted"
+
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
+        print "Problem ocurred installing parted"
+        
+
 
 def main():
     # parse command line options
@@ -331,6 +356,15 @@ if __name__ == "__main__":
 #check root permissions
     if os.geteuid() != 0:
         print "Error: only root can call this script, use sudo instead"
+        sys.exit(0)
+        
+    #check parted
+    if not is_parted_installed():
+        print "Error: parted command not found. Trying to install it:"
+        install_parted()
+
+    if not is_parted_installed():
+        print "Please install parted manually"
         sys.exit(0)
 
     main()
